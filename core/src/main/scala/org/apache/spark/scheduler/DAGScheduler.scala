@@ -250,9 +250,10 @@ private[spark] class DAGScheduler(
       reason: TaskEndReason,
       result: Any,
       accumUpdates: Seq[AccumulatorV2[_, _]],
+      metricPeaks: Array[Long],
       taskInfo: TaskInfo): Unit = {
     eventProcessLoop.post(
-      CompletionEvent(task, reason, result, accumUpdates, taskInfo))
+      CompletionEvent(task, reason, result, accumUpdates, metricPeaks, taskInfo))
   }
 
   /**
@@ -265,10 +266,10 @@ private[spark] class DAGScheduler(
       // (taskId, stageId, stageAttemptId, accumUpdates)
       accumUpdates: Array[(Long, Int, Int, Seq[AccumulableInfo])],
       blockManagerId: BlockManagerId,
-      // executor metrics indexed by ExecutorMetricType.values
-      executorUpdates: ExecutorMetrics): Boolean = {
+      // (stageId, stageAttemptId) -> metrics
+      executorUpdates: Map[(Int, Int), ExecutorMetrics]): Boolean = {
     listenerBus.post(SparkListenerExecutorMetricsUpdate(execId, accumUpdates,
-      Some(executorUpdates)))
+      executorUpdates))
     blockManagerMaster.driverEndpoint.askSync[Boolean](
       BlockManagerHeartbeat(blockManagerId), new RpcTimeout(600 seconds, "BlockManagerHeartbeat"))
   }
@@ -1311,7 +1312,8 @@ private[spark] class DAGScheduler(
       }
 
     listenerBus.post(SparkListenerTaskEnd(event.task.stageId, event.task.stageAttemptId,
-      Utils.getFormattedClassName(event.task), event.reason, event.taskInfo, taskMetrics))
+      Utils.getFormattedClassName(event.task), event.reason, event.taskInfo,
+      new ExecutorMetrics(event.metricPeaks), taskMetrics))
   }
 
   /**

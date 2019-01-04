@@ -23,7 +23,7 @@ import org.mockito.ArgumentMatchers.{any, eq => meq}
 import org.mockito.Mockito.{mock, never, verify, when}
 import org.scalatest.{BeforeAndAfter, PrivateMethodTester}
 
-import org.apache.spark.executor.TaskMetrics
+import org.apache.spark.executor.{ExecutorMetrics, TaskMetrics}
 import org.apache.spark.internal.config
 import org.apache.spark.internal.config.Tests.TEST_SCHEDULE_INTERVAL
 import org.apache.spark.scheduler._
@@ -277,8 +277,10 @@ class ExecutorAllocationManagerSuite
 
     post(sc.listenerBus, SparkListenerStageCompleted(stage))
 
-    post(sc.listenerBus, SparkListenerTaskEnd(0, 0, null, Success, taskInfo1, null))
-    post(sc.listenerBus, SparkListenerTaskEnd(2, 0, null, Success, taskInfo2, null))
+    post(sc.listenerBus,
+      SparkListenerTaskEnd(0, 0, null, Success, taskInfo1, new ExecutorMetrics, null))
+    post(sc.listenerBus,
+      SparkListenerTaskEnd(2, 0, null, Success, taskInfo2, new ExecutorMetrics, null))
     assert(totalRunningTasks(manager) === 0)
   }
 
@@ -305,10 +307,12 @@ class ExecutorAllocationManagerSuite
     post(sc.listenerBus, SparkListenerTaskStart(2, 0, task2Info))
 
     task1Info.markFinished(TaskState.FINISHED, System.currentTimeMillis())
-    post(sc.listenerBus, SparkListenerTaskEnd(2, 0, null, Success, task1Info, null))
+    post(sc.listenerBus,
+      SparkListenerTaskEnd(2, 0, null, Success, task1Info, new ExecutorMetrics, null))
 
     task2Info.markFinished(TaskState.FINISHED, System.currentTimeMillis())
-    post(sc.listenerBus, SparkListenerTaskEnd(2, 0, null, Success, task2Info, null))
+    post(sc.listenerBus,
+      SparkListenerTaskEnd(2, 0, null, Success, task2Info, new ExecutorMetrics, null))
 
     assert(adjustRequestedExecutors(manager) === -1)
   }
@@ -431,7 +435,8 @@ class ExecutorAllocationManagerSuite
 
     // Remove executors when numExecutorsTarget is lower than current number of executors
     (1 to 3).map { i => createTaskInfo(i, i, s"$i") }.foreach { info =>
-      post(sc.listenerBus, SparkListenerTaskEnd(0, 0, null, Success, info, null))
+      post(sc.listenerBus,
+        SparkListenerTaskEnd(0, 0, null, Success, info, new ExecutorMetrics, null))
     }
     adjustRequestedExecutors(manager)
     assert(executorIds(manager).size === 8)
@@ -444,8 +449,8 @@ class ExecutorAllocationManagerSuite
     onExecutorRemoved(manager, "3")
 
     // numExecutorsTarget is lower than minNumExecutors
-    post(sc.listenerBus,
-      SparkListenerTaskEnd(0, 0, null, Success, createTaskInfo(4, 4, "4"), null))
+    post(sc.listenerBus, SparkListenerTaskEnd(0, 0, null, Success, createTaskInfo(4, 4, "4"),
+      new ExecutorMetrics, null))
     assert(executorIds(manager).size === 5)
     assert(numExecutorsTarget(manager) === 5)
     assert(maxNumExecutorsNeeded(manager) == 4)
@@ -790,14 +795,17 @@ class ExecutorAllocationManagerSuite
 
     // Finishing all tasks running on an executor should start the remove timer for that executor
     post(sc.listenerBus, SparkListenerTaskEnd(
-      0, 0, "task-type", Success, createTaskInfo(0, 0, "executor-1"), new TaskMetrics))
+      0, 0, "task-type", Success, createTaskInfo(0, 0, "executor-1"), new ExecutorMetrics,
+      new TaskMetrics))
     post(sc.listenerBus, SparkListenerTaskEnd(
-      0, 0, "task-type", Success, createTaskInfo(2, 2, "executor-2"), new TaskMetrics))
+      0, 0, "task-type", Success, createTaskInfo(2, 2, "executor-2"), new ExecutorMetrics,
+      new TaskMetrics))
     assert(removeTimes(manager).size === 4)
     assert(!removeTimes(manager).contains("executor-1")) // executor-1 has not finished yet
     assert(removeTimes(manager).contains("executor-2"))
     post(sc.listenerBus, SparkListenerTaskEnd(
-      0, 0, "task-type", Success, createTaskInfo(1, 1, "executor-1"), new TaskMetrics))
+      0, 0, "task-type", Success, createTaskInfo(1, 1, "executor-1"), new ExecutorMetrics,
+      new TaskMetrics))
     assert(removeTimes(manager).size === 5)
     assert(removeTimes(manager).contains("executor-1")) // executor-1 has now finished
   }
@@ -991,7 +999,8 @@ class ExecutorAllocationManagerSuite
 
     // If the task is failed, we expect it to be resubmitted later.
     val taskEndReason = ExceptionFailure(null, null, null, null, None)
-    post(sc.listenerBus, SparkListenerTaskEnd(0, 0, null, taskEndReason, taskInfo, null))
+    post(sc.listenerBus,
+      SparkListenerTaskEnd(0, 0, null, taskEndReason, taskInfo, new ExecutorMetrics, null))
     assert(maxNumExecutorsNeeded(manager) === 1)
   }
 
@@ -1123,7 +1132,8 @@ class ExecutorAllocationManagerSuite
 
     // have one task finish -- we should adjust the target number of executors down
     // but we should *not* kill any executors yet
-    manager.listener.onTaskEnd(SparkListenerTaskEnd(0, 0, null, Success, taskInfo0, null))
+    manager.listener.onTaskEnd(SparkListenerTaskEnd(0, 0, null, Success, taskInfo0,
+      new ExecutorMetrics, null))
     assert(maxNumExecutorsNeeded(manager) === 1)
     assert(numExecutorsTarget(manager) === 2)
     clock.advance(1000)
