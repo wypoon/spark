@@ -1,4 +1,19 @@
 [ {
+  "id" : "application_1553914137147_0018",
+  "name" : "com.cloudera.spark.LargeBlocks",
+  "attempts" : [ {
+    "startTime" : "2019-04-08T20:39:44.286GMT",
+    "endTime" : "2019-04-08T20:40:46.454GMT",
+    "lastUpdated" : "",
+    "duration" : 62168,
+    "sparkUser" : "systest",
+    "completed" : true,
+    "appSparkVersion" : "3.0.0-SNAPSHOT",
+    "startTimeEpoch" : 1554755984286,
+    "endTimeEpoch" : 1554756046454,
+    "lastUpdatedEpoch" : 0
+  } ]
+}, {
   "id": "application_1536831636016_59384",
   "name": "Spark Pi",
   "attempts": [
